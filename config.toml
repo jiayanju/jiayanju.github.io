@@ -1,5 +1,56 @@
-baseURL = "http://example.org/"
-languageCode = "en-us"
-title = "My New Hugo Site"
+baseURL = "https://jiayanju.github.io"
+languageCode = "zh-cn"
+title = "南极阳光"
 theme = "PaperMod"
+hasCJKLanguage = true # 开启可以让「字数统计」统计汉字
+
+paginate = 11 # 每页的文章数
+enableEmoji = true # 支持 Emoji
+enableRobotsTXT = true # 支持 robots.txt
+googleAnalytics = "" # Google 统计 id
+
+[Permalinks]
+ posts = "/:year/:filename/"
+
+[languages.en]
+languageName = "English"
+weight = 1
+
+[[languages.en.menu.main]]
+name = "Blog"
+url = "/posts"
+weight = 1
+
+[[languages.en.menu.main]]
+name = "Categories"
+url = "/categories"
+weight = 2
+
+[[languages.en.menu.main]]
+name = "Tags"
+url = "/tags"
+weight = 3
+
+[[languages.en.menu.main]]
+name = "About"
+url = "/about"
+weight = 4
+
+[[languages.en.menu.main]]
+name = "Search"
+url = "/search"
+weight = 5
+
+
+[params]
+    since = 2021
+    env = "production"
+    author = "南极阳光"                          # Author's name
+    avatar = "/images/me/avatar.png"           # Author's avatar
+    subtitle = "Just for Fun"                  # Subtitle
+
+    beian = ""
+    baiduAnalytics = ""
+
+    license= '本文采用<a rel="license" href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank">知识共享署名-非商业性使用 4.0 国际许可协议</a>进行许可'
 
