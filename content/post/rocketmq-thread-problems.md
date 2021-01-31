@@ -2,7 +2,7 @@
 
 title: "RocketMQ消费者线程“大爆炸”" 
 
-date: 2020-09-15T11:30:03+00:00 
+date: 2021-01-30T11:11:11+08:00 
 
 categories: ["消息队列"]
 
@@ -27,16 +27,11 @@ disableHLJS: true
 disableShare: false 
 
 cover:
-
-​	image: "https://raw.githubusercontent.com/jiayanju/imgrepo/main/bud.jpg"
-
-​	alt: ""
-
-​	caption: ""
-
-​	relative: false
-
-​	hidden: false
+  image: "https://raw.githubusercontent.com/jiayanju/imgrepo/main/bud.jpg"
+  alt: ""
+  caption: ""
+  relative: false
+  hidden: false
 
 ---
 
@@ -48,7 +43,7 @@ cover:
 
 都会对应的开启一个PushConsumer并启动底层的相关的线程。例如下图中的PullMessageService线程的数量和RocketMQMessageListener的数量是对应的。
 
-### ![](https://raw.githubusercontent.com/jiayanju/imgrepo/main/weifeng%E7%BA%BF%E7%A8%8B.png)
+![](https://raw.githubusercontent.com/jiayanju/imgrepo/main/weifeng%E7%BA%BF%E7%A8%8B.png)
 
 ### 2. 问题分析
 
