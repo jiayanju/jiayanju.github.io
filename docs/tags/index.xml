@@ -6,7 +6,25 @@
     <description>Recent content in Tags on 南极阳光</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sat, 30 Jan 2021 11:11:11 +0800</lastBuildDate><atom:link href="https://jiayanju.github.io/tags/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Fri, 05 Feb 2021 16:00:00 +0800</lastBuildDate><atom:link href="https://jiayanju.github.io/tags/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>MySQL</title>
+      <link>https://jiayanju.github.io/tags/mysql/</link>
+      <pubDate>Fri, 05 Feb 2021 16:00:00 +0800</pubDate>
+      
+      <guid>https://jiayanju.github.io/tags/mysql/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>数据库</title>
+      <link>https://jiayanju.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/</link>
+      <pubDate>Fri, 05 Feb 2021 16:00:00 +0800</pubDate>
+      
+      <guid>https://jiayanju.github.io/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/</guid>
+      <description></description>
+    </item>
+    
     <item>
       <title>RocketMQ</title>
       <link>https://jiayanju.github.io/tags/rocketmq/</link>

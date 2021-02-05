@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>MySQL on 南极阳光</title>
+    <link>https://jiayanju.github.io/categories/mysql/</link>
+    <description>Recent content in MySQL on 南极阳光</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Fri, 05 Feb 2021 16:00:00 +0800</lastBuildDate><atom:link href="https://jiayanju.github.io/categories/mysql/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>MySQL使用存储过程批量插入数据</title>
+      <link>https://jiayanju.github.io/post/mysql-batch-insert/</link>
+      <pubDate>Fri, 05 Feb 2021 16:00:00 +0800</pubDate>
+      
+      <guid>https://jiayanju.github.io/post/mysql-batch-insert/</guid>
+      <description>最近有个需求需要实现LBS服务，基于用户当前的位置信息，返回用户周边的一些位置。这个需求现在使用很多方法都可以实现，比如基于redis，el</description>
+    </item>
+    
+  </channel>
+</rss>
