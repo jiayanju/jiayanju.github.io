@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>工作效率 on 南极阳光</title>
+    <link>https://jiayanju.github.io/tags/%E5%B7%A5%E4%BD%9C%E6%95%88%E7%8E%87/</link>
+    <description>Recent content in 工作效率 on 南极阳光</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Fri, 05 Feb 2021 17:30:00 +0800</lastBuildDate><atom:link href="https://jiayanju.github.io/tags/%E5%B7%A5%E4%BD%9C%E6%95%88%E7%8E%87/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>IDEA手动触发MapStruct生成Mapper实现</title>
+      <link>https://jiayanju.github.io/post/idea-mapstruct-refresh/</link>
+      <pubDate>Fri, 05 Feb 2021 17:30:00 +0800</pubDate>
+      
+      <guid>https://jiayanju.github.io/post/idea-mapstruct-refresh/</guid>
+      <description>项目中使用了MapStruct来生成前端的request json对象到后端DTO或者domain的映射。 但是有的时候在web项目的类里面添加</description>
+    </item>
+    
+  </channel>
+</rss>
