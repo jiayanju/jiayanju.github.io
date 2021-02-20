@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Redis on 南极阳光</title>
+    <link>https://jiayanju.github.io/categories/redis/</link>
+    <description>Recent content in Redis on 南极阳光</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sat, 20 Feb 2021 22:30:00 +0800</lastBuildDate><atom:link href="https://jiayanju.github.io/categories/redis/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>redisTemplate执行lua脚本抛出IllegalStateException异常</title>
+      <link>https://jiayanju.github.io/post/redistemplate%E6%89%A7%E8%A1%8Clua%E8%84%9A%E6%9C%AC%E6%8A%9B%E5%87%BAillegalstateexception%E5%BC%82%E5%B8%B8/</link>
+      <pubDate>Sat, 20 Feb 2021 22:30:00 +0800</pubDate>
+      
+      <guid>https://jiayanju.github.io/post/redistemplate%E6%89%A7%E8%A1%8Clua%E8%84%9A%E6%9C%AC%E6%8A%9B%E5%87%BAillegalstateexception%E5%BC%82%E5%B8%B8/</guid>
+      <description>1. 问题描述 在项目中，实现延迟队列的过程中，需要实现一个分布式锁，由于项目已经使用了Redis，就打算基于Redis实现一个简单的分布式锁。对</description>
+    </item>
+    
+  </channel>
+</rss>
