@@ -26,7 +26,7 @@ disableHLJS: true
 disableShare: false 
 
 cover:
-  image: "https://raw.githubusercontent.com/jiayanju/imgrepo/main/floor.jpg"
+  image: "https://raw.githubusercontent.com/jiayanju/imgrepo/main/floor1.jpg"
   alt: ""
   caption: ""
   relative: false
