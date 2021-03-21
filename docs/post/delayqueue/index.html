@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>延迟队列的实现原理和使用 | 南极阳光</title>
+
+<meta name="keywords" content="Redis" />
+<meta name="description" content="目前项目中使用的延迟消息发送是基于Redis的键空间通知，监听Redis Key的失效过期事件来实现的。这种方式可以满足延迟发送的功能需求，但">
+<meta name="author" content="Me">
+<link rel="canonical" href="https://jiayanju.github.io/post/delayqueue/" />
+<link href="/assets/css/stylesheet.min.4f1ad98d0bbc51ea2c950f063c7e29522bc8945c9dd06348318cd4cce6be44bb.css" integrity="sha256-TxrZjQu8UeoslQ8GPH4pUivIlFyd0GNIMYzUzOa&#43;RLs=" rel="preload stylesheet"
+    as="style">
+
+<link rel="icon" href="https://jiayanju.github.io/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jiayanju.github.io/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jiayanju.github.io/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jiayanju.github.io/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jiayanju.github.io/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<meta name="generator" content="Hugo 0.80.0" />
+
+
+<meta property="og:title" content="延迟队列的实现原理和使用" />
+<meta property="og:description" content="目前项目中使用的延迟消息发送是基于Redis的键空间通知，监听Redis Key的失效过期事件来实现的。这种方式可以满足延迟发送的功能需求，但" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://jiayanju.github.io/post/delayqueue/" />
+<meta property="og:image" content="https://raw.githubusercontent.com/jiayanju/imgrepo/main/delayQueue.jpg" /><meta property="article:published_time" content="2021-03-20T12:00:00+08:00" />
+<meta property="article:modified_time" content="2021-03-20T12:00:00+08:00" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="https://raw.githubusercontent.com/jiayanju/imgrepo/main/delayQueue.jpg" />
+<meta name="twitter:title" content="延迟队列的实现原理和使用"/>
+<meta name="twitter:description" content="目前项目中使用的延迟消息发送是基于Redis的键空间通知，监听Redis Key的失效过期事件来实现的。这种方式可以满足延迟发送的功能需求，但"/>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "延迟队列的实现原理和使用",
+  "name": "延迟队列的实现原理和使用",
+  "description": "目前项目中使用的延迟消息发送是基于Redis的键空间通知，监听Redis Key的失效过期事件来实现的。这种方式可以满足延迟发送的功能需求，但",
+  "keywords": [
+    "Redis"
+  ],
+  "articleBody": "目前项目中使用的延迟消息发送是基于Redis的键空间通知，监听Redis Key的失效过期事件来实现的。这种方式可以满足延迟发送的功能需求，但是有如下的问题。\n 时效性问题。Redis过期Key的扫描处理机制是分批进行处理，每次扫描一部分key判断是否过期。因此在redis的key比较多（数量上万）时会有延迟。 键空间通知依赖于pub/sub模式，消息通知不能持久化。如果服务宕机或者客户端断开连接，在这段期间失效key的通知就会丢失。  考虑到系统中已经使用延迟任务的功能已经后续的新功能也会有这方面的需求，因此在开发超时回复功能时，实现了一个基于redis的延迟队列功能。\n1. 延迟队列架构 首先看一下架构图：\n主要有下面几个部分构成\n Bucket - 基于Redis的有序集合(Sorted Set)，score为到期的时间戳，值为jobId。使用SortedSet的rangeByScore找出到期的job，bucket可以有多个，以达到均衡的处理大量的job，防止单个bucket的过大造成的阻塞。 Job Pool - 基于Redis的Hash结构，存放延迟任务job的元信息，包括任务体，topic等信息。 Ready Queue - 基于Redis的List结构。把已经到期要执行的jobId放入队列里面，供消费者去处理。 Bucket Handler Thread - Java线程不断的轮询bucket，获取到期的jobId并放入相应的Ready Queue里面。  整个架构还是挺简单明了的。\n2. 延迟队列的实现代码简单解释 DelayJob类 public class DelayJob { /** * Job的唯一标识。用来检索和删除指定的Job信息 */ private Long id; /** * 延迟任务的业务标识类型，不同的业务可以使用不同的topic进行区分 */ private String topic; /** * Job需要延迟的时间。单位：秒 */ private Long delay; /** * Job的内容，供消费者做具体的业务处理，以json格式存储。 */ private String body; } DelayQueue类 延迟队列的接口类，主要使用这个类来操作延迟队列。封装了一下基本的操作，例如push，pop，remove等函数\n/** * 向延迟队列添加延迟任务 * * @param delayJob * @return */ public Long push(DelayJob delayJob) { Long runTime = System.currentTimeMillis() + (delayJob.getDelay() * 1000); //生成唯一ID  Long jobId = snowFlakeIdGenerator.nextId(); delayJob.setId(jobId); delayJobPool.addDelayJob(delayJob); delayBucket.addToBucket(getBucketName(jobId), jobId, runTime); return jobId; } 这个方法主要做了一下工作：\n计算到期时间\n生成唯一的jobId，这里使用了snowflake算法\n把DelayJob放入Job Pool\n把延迟任务的jobId放入bucket\n/** * 获取延迟队列中已经准备好的任务 * * @param topic * @return */ public DelayJob pop(String topic) { DelayJob result = null; Long jobId = readyJobQueue.poll(topic); if (jobId != null) { result = delayJobPool.getDelayJob(jobId); } return result; } pop方法，主要是从ReadyQueue中获取要处理的延迟任务jobId，然后从Job Pool中返回延迟任务的信息。\nDelayBucket类 public void addToBucket(String bucketName, Long jobId, Long timestamp) { redisTemplateLong.opsForZSet().add(getDelayBucketKey(bucketName), jobId, timestamp.doubleValue()); } 添加延迟任务的JobId到bucket中，以到期的timestamp为score，jobId为值\npublic ListLong getExpiredJobFromBucket(String bucketName) { ListLong jobIdList = new ArrayList(); long now = System.currentTimeMillis(); SetLong jobIds = redisTemplateLong .opsForZSet().rangeByScore(getDelayBucketKey(bucketName), 0, now); if (jobIds != null \u0026\u0026 jobIds.size()  0) { jobIdList = jobIds.stream().collect(Collectors.toList()); } return jobIdList; } 使用rangeByScore获取到期的任务Id并返回。\nDelayQueueHandler 轮询bucket，并将到期的job放入ready queue里面\nwhile (true) { RedisDistributeLock lock = new RedisDistributeLock(redisTemplate, DELAY_BUCKET_PROCESS_LOCK_KEY + bucketName); String lockId = null; try { lockId = lock.lock(); ListLong jobIds = delayBucket.getExpiredJobFromBucket(bucketName); if (jobIds != null \u0026\u0026 jobIds.size()  0) { ListDelayJob delayJobs = delayJobPool.getDelayJobs(jobIds); if (delayJobs != null \u0026\u0026 delayJobs.size()  0) { MapString, ListLong topicJobIdMap = delayJobs.stream().collect( Collectors.groupingBy(DelayJob::getTopic, Collectors.mapping(DelayJob::getId, Collectors.toList()))); topicJobIdMap.forEach((topic, jobIdList) - { readyJobQueue.pushAll(topic, jobIdList); }); } delayBucket.batchDeleteFromBucket(bucketName, jobIds); } } catch (Exception e) { log.error(e.getMessage(), e); } finally { try { lock.unlock(lockId); } catch (Exception e) { log.error(e.getMessage(), e); } } sleep(); } delayBucket.getExpiredJobFromBucket(bucketName) - 返回到期的延迟任务列表\ndelayJobPool.getDelayJobs(jobIds) - 从Job Pool返回延迟任务信息\n接下来把到期的延迟任务放入起设置的topic对应的ReadyQueue里面。\n最后从bucket里面删除任务Id\n3. 延迟队列使用 添加延迟任务 DelayJob delayJob = new DelayJob(); delayJob.setTopic(ChatRecordConstants.DELAY_QUEUE_REPLAY_TIMEOUT_TOPIC); delayJob.setDelay(timeoutSeconds); delayJob.setBody(jobBody); Long jobId = delayQueue.push(delayJob); 生成DelayJob，需要设置topic，延迟时间和消息体。然后调用delayQueue.push(delayJob)放入延迟队列里面。返回这个延迟任务的唯一标识jobId。如果后续业务逻辑需要取消这个延迟任务，需要通过jobId来讲延迟任务从队列里面删除。在这种情况下需要记录存储jobId。\ntopic可以根据业务逻辑生成不同的topic，来达到多队列多线程的消费消息。\n消费延迟任务 @Component @Slf4j @AllArgsConstructor public class DelayJobMessageConsumer implements Runnable, ApplicationListenerApplicationReadyEvent { private static final String DELAY_QUEUE_CONSUMER_TOPIC_LOCK = \"delay:queue:consumer:topic:\"; private final Executor consumerExecutor; private final DelayQueue delayQueue; private final RedisTemplateString, String redisTemplate; @Override public void onApplicationEvent(ApplicationReadyEvent event) { consumerExecutor.execute(this::run); } @Override public void run() { log.info(\"DelayJobMessageConsumer thread started\"); while (true) { RedisDistributeLock lock = new RedisDistributeLock(redisTemplate, DELAY_QUEUE_CONSUMER_TOPIC_LOCK + ChatRecordConstants.DELAY_QUEUE_REPLAY_TIMEOUT_TOPIC); String lockId = null; DelayJob delayJob = null; try { lockId = lock.lock(); //从ReadyQueue获取延迟任务  delayJob = delayQueue.pop(ChatRecordConstants.DELAY_QUEUE_REPLAY_TIMEOUT_TOPIC, 5, TimeUnit.SECONDS); log.debug(\"DelayJobMessageConsumer get job from queue returned: {}\", ChatRecordConstants.DELAY_QUEUE_REPLAY_TIMEOUT_TOPIC); } catch (Exception e) { log.error(\"DelayJobMessageConsumer get job from queue {} exception: {}\", ChatRecordConstants.DELAY_QUEUE_REPLAY_TIMEOUT_TOPIC, e.getMessage(), e); } finally { try { lock.unlock(lockId); } catch (Exception e) { log.error(\"DelayJobMessageConsumer redis unlock error happened. {}\", e.getMessage(), e); } } //process delayJob  if (delayJob != null) { try { //对任务进行处理  // 将任务从Job Pool删除  delayQueue.finish(delayJob.getId()); } catch (Exception e) { log.error(\"DelayJobMessageConsumer process delay job error. {}\", e.getMessage(), e); } } } } } 消费者线程轮询从ReadyQueue里面获取要执行的延迟任务，并进行处理。\n里面使用了分布式锁是考虑到将来可能会集群部署消费者服务时，保证只有一个线程进行消费处理。\n4. 总结 目前实现了延迟队列的基本功能，后续使用过程可能还需要进行一些功能调整，比如对消费失败的消息放入死信队列等。\n",
+  "wordCount" : "1942",
+  "inLanguage": "en",
+  "image":"https://raw.githubusercontent.com/jiayanju/imgrepo/main/delayQueue.jpg","datePublished": "2021-03-20T12:00:00+08:00",
+  "dateModified": "2021-03-20T12:00:00+08:00",
+  "author":{
+    "@type": "Person",
+    "name": "Me"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jiayanju.github.io/post/delayqueue/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "南极阳光",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jiayanju.github.io/favicon.ico"
+    }
+  }
+}
+</script>
+
+
+
+</head>
+
+<body class="" id="top">
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.body.classList.add('dark');
+    } else if (localStorage.getItem("pref-theme") === "light") {
+        document.body.classList.remove('dark')
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark');
+    }
+
+</script>
+<noscript>
+    <style type="text/css">
+        .theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+</noscript>
+<header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://jiayanju.github.io" accesskey="h" title="南极阳光 (Alt + H)">南极阳光</a>
+            <span class="logo-switches">
+                <span class="theme-toggle" title="(Alt + T)">
+                    <a id="theme-toggle" accesskey="t">
+                        <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                        <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="5"></circle>
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="23"></line>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                            <line x1="1" y1="12" x2="3" y2="12"></line>
+                            <line x1="21" y1="12" x2="23" y2="12"></line>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                        </svg>
+                    </a>
+                </span>
+                
+            </span>
+        </div>
+        <ul class="menu" id="menu" onscroll="menu_on_scroll()">
+            <li>
+                <a href="https://jiayanju.github.io/posts" title="Blog">
+                    <span>Blog</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://jiayanju.github.io/categories" title="Categories">
+                    <span>Categories</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://jiayanju.github.io/tags" title="Tags">
+                    <span>Tags</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://jiayanju.github.io/about" title="About">
+                    <span>About</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://jiayanju.github.io/search" title="Search (Alt &#43; /)" accesskey=/>
+                    <span>Search</span>
+                </a>
+            </li></ul>
+    </nav>
+</header>
+
+    <main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    <h1 class="post-title">
+      延迟队列的实现原理和使用
+    </h1>
+    <div class="post-description">
+      
+    </div>
+    <div class="post-meta">
+
+March 20, 2021&nbsp;·&nbsp;Me
+
+    </div>
+  </header> 
+<figure class="entry-cover"><img src="https://raw.githubusercontent.com/jiayanju/imgrepo/main/delayQueue.jpg" alt="">
+        
+</figure>
+
+  <div class="toc">
+    <details >
+      <summary accesskey="c" title="(Alt + C)">
+        <div class="details">Table of Contents</div>
+      </summary>
+      <div class="inner"><ul><li>
+        <a href="#1-%e5%bb%b6%e8%bf%9f%e9%98%9f%e5%88%97%e6%9e%b6%e6%9e%84" aria-label="1. 延迟队列架构">1. 延迟队列架构</a></li><li>
+        <a href="#2-%e5%bb%b6%e8%bf%9f%e9%98%9f%e5%88%97%e7%9a%84%e5%ae%9e%e7%8e%b0%e4%bb%a3%e7%a0%81%e7%ae%80%e5%8d%95%e8%a7%a3%e9%87%8a" aria-label="2. 延迟队列的实现代码简单解释">2. 延迟队列的实现代码简单解释</a><ul>
+            <li>
+        <a href="#delayjob%e7%b1%bb" aria-label="DelayJob类">DelayJob类</a></li><li>
+        <a href="#delayqueue%e7%b1%bb" aria-label="DelayQueue类">DelayQueue类</a></li><li>
+        <a href="#delaybucket%e7%b1%bb" aria-label="DelayBucket类">DelayBucket类</a></li><li>
+        <a href="#delayqueuehandler" aria-label="DelayQueueHandler">DelayQueueHandler</a></li></ul>
+    </li><li>
+        <a href="#3-%e5%bb%b6%e8%bf%9f%e9%98%9f%e5%88%97%e4%bd%bf%e7%94%a8" aria-label="3. 延迟队列使用">3. 延迟队列使用</a><ul>
+            <li>
+        <a href="#%e6%b7%bb%e5%8a%a0%e5%bb%b6%e8%bf%9f%e4%bb%bb%e5%8a%a1" aria-label="添加延迟任务">添加延迟任务</a></li><li>
+        <a href="#%e6%b6%88%e8%b4%b9%e5%bb%b6%e8%bf%9f%e4%bb%bb%e5%8a%a1" aria-label="消费延迟任务">消费延迟任务</a></li></ul>
+    </li><li>
+        <a href="#4-%e6%80%bb%e7%bb%93" aria-label="4. 总结">4. 总结</a></li></ul>
+      </div>
+    </details>
+  </div>
+  <div class="post-content">
+<p>目前项目中使用的延迟消息发送是基于Redis的键空间通知，监听Redis Key的失效过期事件来实现的。这种方式可以满足延迟发送的功能需求，但是有如下的问题。</p>
+<ol>
+<li>时效性问题。Redis过期Key的扫描处理机制是分批进行处理，每次扫描一部分key判断是否过期。因此在redis的key比较多（数量上万）时会有延迟。</li>
+<li>键空间通知依赖于pub/sub模式，消息通知不能持久化。如果服务宕机或者客户端断开连接，在这段期间失效key的通知就会丢失。</li>
+</ol>
+<p>考虑到系统中已经使用延迟任务的功能已经后续的新功能也会有这方面的需求，因此在开发超时回复功能时，实现了一个基于redis的延迟队列功能。</p>
+<h3 id="1-延迟队列架构">1. 延迟队列架构<a hidden class="anchor" aria-hidden="true" href="#1-延迟队列架构">#</a></h3>
+<p>首先看一下架构图：</p>
+<p><img src="https://raw.githubusercontent.com/jiayanju/imgrepo/main/delayqueue.png" alt=""></p>
+<p>主要有下面几个部分构成</p>
+<ol>
+<li>Bucket - 基于Redis的有序集合(Sorted Set)，score为到期的时间戳，值为jobId。使用SortedSet的rangeByScore找出到期的job，bucket可以有多个，以达到均衡的处理大量的job，防止单个bucket的过大造成的阻塞。</li>
+<li>Job Pool - 基于Redis的Hash结构，存放延迟任务job的元信息，包括任务体，topic等信息。</li>
+<li>Ready Queue - 基于Redis的List结构。把已经到期要执行的jobId放入队列里面，供消费者去处理。</li>
+<li>Bucket Handler Thread - Java线程不断的轮询bucket，获取到期的jobId并放入相应的Ready Queue里面。</li>
+</ol>
+<p>整个架构还是挺简单明了的。</p>
+<h3 id="2-延迟队列的实现代码简单解释">2. 延迟队列的实现代码简单解释<a hidden class="anchor" aria-hidden="true" href="#2-延迟队列的实现代码简单解释">#</a></h3>
+<h4 id="delayjob类">DelayJob类<a hidden class="anchor" aria-hidden="true" href="#delayjob类">#</a></h4>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">DelayJob</span> <span style="color:#f92672">{</span>
+
+  <span style="color:#75715e">/**
+</span><span style="color:#75715e">   * Job的唯一标识。用来检索和删除指定的Job信息
+</span><span style="color:#75715e">   */</span>
+  <span style="color:#66d9ef">private</span> Long id<span style="color:#f92672">;</span>
+
+  <span style="color:#75715e">/**
+</span><span style="color:#75715e">   * 延迟任务的业务标识类型，不同的业务可以使用不同的topic进行区分
+</span><span style="color:#75715e">   */</span>
+  <span style="color:#66d9ef">private</span> String topic<span style="color:#f92672">;</span>
+
+  <span style="color:#75715e">/**
+</span><span style="color:#75715e">   * Job需要延迟的时间。单位：秒
+</span><span style="color:#75715e">   */</span>
+  <span style="color:#66d9ef">private</span> Long delay<span style="color:#f92672">;</span>
+
+  <span style="color:#75715e">/**
+</span><span style="color:#75715e">   * Job的内容，供消费者做具体的业务处理，以json格式存储。
+</span><span style="color:#75715e">   */</span>
+  <span style="color:#66d9ef">private</span> String body<span style="color:#f92672">;</span>
+
+<span style="color:#f92672">}</span>
+</code></pre></div><h4 id="delayqueue类">DelayQueue类<a hidden class="anchor" aria-hidden="true" href="#delayqueue类">#</a></h4>
+<p>延迟队列的接口类，主要使用这个类来操作延迟队列。封装了一下基本的操作，例如push，pop，remove等函数</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#75715e">/**
+</span><span style="color:#75715e"> * 向延迟队列添加延迟任务
+</span><span style="color:#75715e"> *
+</span><span style="color:#75715e"> * @param delayJob
+</span><span style="color:#75715e"> * @return
+</span><span style="color:#75715e"> */</span>
+<span style="color:#66d9ef">public</span> Long <span style="color:#a6e22e">push</span><span style="color:#f92672">(</span>DelayJob delayJob<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+  Long runTime <span style="color:#f92672">=</span> System<span style="color:#f92672">.</span><span style="color:#a6e22e">currentTimeMillis</span><span style="color:#f92672">()</span> <span style="color:#f92672">+</span> <span style="color:#f92672">(</span>delayJob<span style="color:#f92672">.</span><span style="color:#a6e22e">getDelay</span><span style="color:#f92672">()</span> <span style="color:#f92672">*</span> 1000<span style="color:#f92672">);</span>   
+  <span style="color:#75715e">//生成唯一ID
+</span><span style="color:#75715e"></span>  Long jobId <span style="color:#f92672">=</span> snowFlakeIdGenerator<span style="color:#f92672">.</span><span style="color:#a6e22e">nextId</span><span style="color:#f92672">();</span>
+  delayJob<span style="color:#f92672">.</span><span style="color:#a6e22e">setId</span><span style="color:#f92672">(</span>jobId<span style="color:#f92672">);</span>
+  delayJobPool<span style="color:#f92672">.</span><span style="color:#a6e22e">addDelayJob</span><span style="color:#f92672">(</span>delayJob<span style="color:#f92672">);</span>
+  delayBucket<span style="color:#f92672">.</span><span style="color:#a6e22e">addToBucket</span><span style="color:#f92672">(</span>getBucketName<span style="color:#f92672">(</span>jobId<span style="color:#f92672">),</span> jobId<span style="color:#f92672">,</span> runTime<span style="color:#f92672">);</span>
+
+  <span style="color:#66d9ef">return</span> jobId<span style="color:#f92672">;</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>这个方法主要做了一下工作：</p>
+<p>计算到期时间</p>
+<p>生成唯一的jobId，这里使用了snowflake算法</p>
+<p>把DelayJob放入Job Pool</p>
+<p>把延迟任务的jobId放入bucket</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#75715e">/**
+</span><span style="color:#75715e"> * 获取延迟队列中已经准备好的任务
+</span><span style="color:#75715e"> *
+</span><span style="color:#75715e"> * @param topic
+</span><span style="color:#75715e"> * @return
+</span><span style="color:#75715e"> */</span>
+<span style="color:#66d9ef">public</span> DelayJob <span style="color:#a6e22e">pop</span><span style="color:#f92672">(</span>String topic<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+  DelayJob result <span style="color:#f92672">=</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">;</span>
+  Long jobId <span style="color:#f92672">=</span> readyJobQueue<span style="color:#f92672">.</span><span style="color:#a6e22e">poll</span><span style="color:#f92672">(</span>topic<span style="color:#f92672">);</span>
+  <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>jobId <span style="color:#f92672">!=</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    result <span style="color:#f92672">=</span> delayJobPool<span style="color:#f92672">.</span><span style="color:#a6e22e">getDelayJob</span><span style="color:#f92672">(</span>jobId<span style="color:#f92672">);</span>
+  <span style="color:#f92672">}</span>
+
+  <span style="color:#66d9ef">return</span> result<span style="color:#f92672">;</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>pop方法，主要是从ReadyQueue中获取要处理的延迟任务jobId，然后从Job Pool中返回延迟任务的信息。</p>
+<h4 id="delaybucket类">DelayBucket类<a hidden class="anchor" aria-hidden="true" href="#delaybucket类">#</a></h4>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">addToBucket</span><span style="color:#f92672">(</span>String bucketName<span style="color:#f92672">,</span> Long jobId<span style="color:#f92672">,</span> Long timestamp<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+  redisTemplateLong<span style="color:#f92672">.</span><span style="color:#a6e22e">opsForZSet</span><span style="color:#f92672">().</span><span style="color:#a6e22e">add</span><span style="color:#f92672">(</span>getDelayBucketKey<span style="color:#f92672">(</span>bucketName<span style="color:#f92672">),</span> jobId<span style="color:#f92672">,</span> timestamp<span style="color:#f92672">.</span><span style="color:#a6e22e">doubleValue</span><span style="color:#f92672">());</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>添加延迟任务的JobId到bucket中，以到期的timestamp为score，jobId为值</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">public</span> List<span style="color:#f92672">&lt;</span>Long<span style="color:#f92672">&gt;</span> <span style="color:#a6e22e">getExpiredJobFromBucket</span><span style="color:#f92672">(</span>String bucketName<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+  List<span style="color:#f92672">&lt;</span>Long<span style="color:#f92672">&gt;</span> jobIdList <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> ArrayList<span style="color:#f92672">&lt;&gt;();</span>
+  <span style="color:#66d9ef">long</span> now <span style="color:#f92672">=</span> System<span style="color:#f92672">.</span><span style="color:#a6e22e">currentTimeMillis</span><span style="color:#f92672">();</span>
+  Set<span style="color:#f92672">&lt;</span>Long<span style="color:#f92672">&gt;</span> jobIds <span style="color:#f92672">=</span> redisTemplateLong
+      <span style="color:#f92672">.</span><span style="color:#a6e22e">opsForZSet</span><span style="color:#f92672">().</span><span style="color:#a6e22e">rangeByScore</span><span style="color:#f92672">(</span>getDelayBucketKey<span style="color:#f92672">(</span>bucketName<span style="color:#f92672">),</span> 0<span style="color:#f92672">,</span> now<span style="color:#f92672">);</span>
+  <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>jobIds <span style="color:#f92672">!=</span> <span style="color:#66d9ef">null</span> <span style="color:#f92672">&amp;&amp;</span> jobIds<span style="color:#f92672">.</span><span style="color:#a6e22e">size</span><span style="color:#f92672">()</span> <span style="color:#f92672">&gt;</span> 0<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    jobIdList <span style="color:#f92672">=</span> jobIds<span style="color:#f92672">.</span><span style="color:#a6e22e">stream</span><span style="color:#f92672">().</span><span style="color:#a6e22e">collect</span><span style="color:#f92672">(</span>Collectors<span style="color:#f92672">.</span><span style="color:#a6e22e">toList</span><span style="color:#f92672">());</span>
+  <span style="color:#f92672">}</span>
+  <span style="color:#66d9ef">return</span> jobIdList<span style="color:#f92672">;</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>使用rangeByScore获取到期的任务Id并返回。</p>
+<h4 id="delayqueuehandler">DelayQueueHandler<a hidden class="anchor" aria-hidden="true" href="#delayqueuehandler">#</a></h4>
+<p>轮询bucket，并将到期的job放入ready queue里面</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#66d9ef">while</span> <span style="color:#f92672">(</span><span style="color:#66d9ef">true</span><span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+  RedisDistributeLock lock <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> RedisDistributeLock<span style="color:#f92672">(</span>redisTemplate<span style="color:#f92672">,</span> DELAY_BUCKET_PROCESS_LOCK_KEY <span style="color:#f92672">+</span> bucketName<span style="color:#f92672">);</span>
+  String lockId <span style="color:#f92672">=</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">;</span>
+  <span style="color:#66d9ef">try</span> <span style="color:#f92672">{</span>
+    lockId <span style="color:#f92672">=</span> lock<span style="color:#f92672">.</span><span style="color:#a6e22e">lock</span><span style="color:#f92672">();</span>
+    List<span style="color:#f92672">&lt;</span>Long<span style="color:#f92672">&gt;</span> jobIds <span style="color:#f92672">=</span> delayBucket<span style="color:#f92672">.</span><span style="color:#a6e22e">getExpiredJobFromBucket</span><span style="color:#f92672">(</span>bucketName<span style="color:#f92672">);</span>
+    <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>jobIds <span style="color:#f92672">!=</span> <span style="color:#66d9ef">null</span> <span style="color:#f92672">&amp;&amp;</span> jobIds<span style="color:#f92672">.</span><span style="color:#a6e22e">size</span><span style="color:#f92672">()</span> <span style="color:#f92672">&gt;</span> 0<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+      List<span style="color:#f92672">&lt;</span>DelayJob<span style="color:#f92672">&gt;</span> delayJobs <span style="color:#f92672">=</span> delayJobPool<span style="color:#f92672">.</span><span style="color:#a6e22e">getDelayJobs</span><span style="color:#f92672">(</span>jobIds<span style="color:#f92672">);</span>
+      <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>delayJobs <span style="color:#f92672">!=</span> <span style="color:#66d9ef">null</span> <span style="color:#f92672">&amp;&amp;</span> delayJobs<span style="color:#f92672">.</span><span style="color:#a6e22e">size</span><span style="color:#f92672">()</span> <span style="color:#f92672">&gt;</span> 0<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        Map<span style="color:#f92672">&lt;</span>String<span style="color:#f92672">,</span> List<span style="color:#f92672">&lt;</span>Long<span style="color:#f92672">&gt;&gt;</span> topicJobIdMap <span style="color:#f92672">=</span> delayJobs<span style="color:#f92672">.</span><span style="color:#a6e22e">stream</span><span style="color:#f92672">().</span><span style="color:#a6e22e">collect</span><span style="color:#f92672">(</span>
+            Collectors<span style="color:#f92672">.</span><span style="color:#a6e22e">groupingBy</span><span style="color:#f92672">(</span>DelayJob<span style="color:#f92672">::</span>getTopic<span style="color:#f92672">,</span> Collectors<span style="color:#f92672">.</span><span style="color:#a6e22e">mapping</span><span style="color:#f92672">(</span>DelayJob<span style="color:#f92672">::</span>getId<span style="color:#f92672">,</span> Collectors<span style="color:#f92672">.</span><span style="color:#a6e22e">toList</span><span style="color:#f92672">())));</span>
+        topicJobIdMap<span style="color:#f92672">.</span><span style="color:#a6e22e">forEach</span><span style="color:#f92672">((</span>topic<span style="color:#f92672">,</span> jobIdList<span style="color:#f92672">)</span> <span style="color:#f92672">-&gt;</span> <span style="color:#f92672">{</span>
+          readyJobQueue<span style="color:#f92672">.</span><span style="color:#a6e22e">pushAll</span><span style="color:#f92672">(</span>topic<span style="color:#f92672">,</span> jobIdList<span style="color:#f92672">);</span>
+        <span style="color:#f92672">});</span>
+      <span style="color:#f92672">}</span>
+      delayBucket<span style="color:#f92672">.</span><span style="color:#a6e22e">batchDeleteFromBucket</span><span style="color:#f92672">(</span>bucketName<span style="color:#f92672">,</span> jobIds<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+  <span style="color:#f92672">}</span> <span style="color:#66d9ef">catch</span> <span style="color:#f92672">(</span>Exception e<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    log<span style="color:#f92672">.</span><span style="color:#a6e22e">error</span><span style="color:#f92672">(</span>e<span style="color:#f92672">.</span><span style="color:#a6e22e">getMessage</span><span style="color:#f92672">(),</span> e<span style="color:#f92672">);</span>
+  <span style="color:#f92672">}</span> <span style="color:#66d9ef">finally</span> <span style="color:#f92672">{</span>
+    <span style="color:#66d9ef">try</span> <span style="color:#f92672">{</span>
+      lock<span style="color:#f92672">.</span><span style="color:#a6e22e">unlock</span><span style="color:#f92672">(</span>lockId<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span> <span style="color:#66d9ef">catch</span> <span style="color:#f92672">(</span>Exception e<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+      log<span style="color:#f92672">.</span><span style="color:#a6e22e">error</span><span style="color:#f92672">(</span>e<span style="color:#f92672">.</span><span style="color:#a6e22e">getMessage</span><span style="color:#f92672">(),</span> e<span style="color:#f92672">);</span>
+    <span style="color:#f92672">}</span>
+  <span style="color:#f92672">}</span>
+
+  sleep<span style="color:#f92672">();</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>delayBucket.getExpiredJobFromBucket(bucketName)  - 返回到期的延迟任务列表</p>
+<p>delayJobPool.getDelayJobs(jobIds) - 从Job Pool返回延迟任务信息</p>
+<p>接下来把到期的延迟任务放入起设置的topic对应的ReadyQueue里面。</p>
+<p>最后从bucket里面删除任务Id</p>
+<h3 id="3-延迟队列使用">3. 延迟队列使用<a hidden class="anchor" aria-hidden="true" href="#3-延迟队列使用">#</a></h3>
+<h4 id="添加延迟任务">添加延迟任务<a hidden class="anchor" aria-hidden="true" href="#添加延迟任务">#</a></h4>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java">DelayJob delayJob <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> DelayJob<span style="color:#f92672">();</span>
+delayJob<span style="color:#f92672">.</span><span style="color:#a6e22e">setTopic</span><span style="color:#f92672">(</span>ChatRecordConstants<span style="color:#f92672">.</span><span style="color:#a6e22e">DELAY_QUEUE_REPLAY_TIMEOUT_TOPIC</span><span style="color:#f92672">);</span>
+delayJob<span style="color:#f92672">.</span><span style="color:#a6e22e">setDelay</span><span style="color:#f92672">(</span>timeoutSeconds<span style="color:#f92672">);</span>
+delayJob<span style="color:#f92672">.</span><span style="color:#a6e22e">setBody</span><span style="color:#f92672">(</span>jobBody<span style="color:#f92672">);</span>
+Long jobId <span style="color:#f92672">=</span> delayQueue<span style="color:#f92672">.</span><span style="color:#a6e22e">push</span><span style="color:#f92672">(</span>delayJob<span style="color:#f92672">);</span>
+</code></pre></div><p>生成DelayJob，需要设置topic，延迟时间和消息体。然后调用delayQueue.push(delayJob)放入延迟队列里面。返回这个延迟任务的唯一标识jobId。如果后续业务逻辑需要取消这个延迟任务，需要通过jobId来讲延迟任务从队列里面删除。在这种情况下需要记录存储jobId。</p>
+<p>topic可以根据业务逻辑生成不同的topic，来达到多队列多线程的消费消息。</p>
+<h4 id="消费延迟任务">消费延迟任务<a hidden class="anchor" aria-hidden="true" href="#消费延迟任务">#</a></h4>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-java" data-lang="java"><span style="color:#a6e22e">@Component</span>
+<span style="color:#a6e22e">@Slf4j</span>
+<span style="color:#a6e22e">@AllArgsConstructor</span>
+<span style="color:#66d9ef">public</span> <span style="color:#66d9ef">class</span> <span style="color:#a6e22e">DelayJobMessageConsumer</span> <span style="color:#66d9ef">implements</span> Runnable<span style="color:#f92672">,</span> ApplicationListener<span style="color:#f92672">&lt;</span>ApplicationReadyEvent<span style="color:#f92672">&gt;</span> <span style="color:#f92672">{</span>
+
+  <span style="color:#66d9ef">private</span> <span style="color:#66d9ef">static</span> <span style="color:#66d9ef">final</span> String DELAY_QUEUE_CONSUMER_TOPIC_LOCK <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;delay:queue:consumer:topic:&#34;</span><span style="color:#f92672">;</span>
+
+  <span style="color:#66d9ef">private</span> <span style="color:#66d9ef">final</span> Executor consumerExecutor<span style="color:#f92672">;</span>
+
+  <span style="color:#66d9ef">private</span> <span style="color:#66d9ef">final</span> DelayQueue delayQueue<span style="color:#f92672">;</span>
+
+  <span style="color:#66d9ef">private</span> <span style="color:#66d9ef">final</span> RedisTemplate<span style="color:#f92672">&lt;</span>String<span style="color:#f92672">,</span> String<span style="color:#f92672">&gt;</span> redisTemplate<span style="color:#f92672">;</span>
+
+  <span style="color:#a6e22e">@Override</span>
+  <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">onApplicationEvent</span><span style="color:#f92672">(</span>ApplicationReadyEvent event<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+    consumerExecutor<span style="color:#f92672">.</span><span style="color:#a6e22e">execute</span><span style="color:#f92672">(</span><span style="color:#66d9ef">this</span><span style="color:#f92672">::</span>run<span style="color:#f92672">);</span>
+  <span style="color:#f92672">}</span>
+
+  <span style="color:#a6e22e">@Override</span>
+  <span style="color:#66d9ef">public</span> <span style="color:#66d9ef">void</span> <span style="color:#a6e22e">run</span><span style="color:#f92672">()</span> <span style="color:#f92672">{</span>
+    log<span style="color:#f92672">.</span><span style="color:#a6e22e">info</span><span style="color:#f92672">(</span><span style="color:#e6db74">&#34;DelayJobMessageConsumer thread started&#34;</span><span style="color:#f92672">);</span>
+    <span style="color:#66d9ef">while</span> <span style="color:#f92672">(</span><span style="color:#66d9ef">true</span><span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+      RedisDistributeLock lock <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> RedisDistributeLock<span style="color:#f92672">(</span>redisTemplate<span style="color:#f92672">,</span>
+          DELAY_QUEUE_CONSUMER_TOPIC_LOCK <span style="color:#f92672">+</span> ChatRecordConstants<span style="color:#f92672">.</span><span style="color:#a6e22e">DELAY_QUEUE_REPLAY_TIMEOUT_TOPIC</span><span style="color:#f92672">);</span>
+      String lockId <span style="color:#f92672">=</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">;</span>
+      DelayJob delayJob <span style="color:#f92672">=</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">;</span>
+      <span style="color:#66d9ef">try</span> <span style="color:#f92672">{</span>
+        lockId <span style="color:#f92672">=</span> lock<span style="color:#f92672">.</span><span style="color:#a6e22e">lock</span><span style="color:#f92672">();</span>
+
+        <span style="color:#75715e">//从ReadyQueue获取延迟任务
+</span><span style="color:#75715e"></span>        delayJob <span style="color:#f92672">=</span> delayQueue<span style="color:#f92672">.</span><span style="color:#a6e22e">pop</span><span style="color:#f92672">(</span>ChatRecordConstants<span style="color:#f92672">.</span><span style="color:#a6e22e">DELAY_QUEUE_REPLAY_TIMEOUT_TOPIC</span><span style="color:#f92672">,</span> 5<span style="color:#f92672">,</span> TimeUnit<span style="color:#f92672">.</span><span style="color:#a6e22e">SECONDS</span><span style="color:#f92672">);</span>
+
+        log<span style="color:#f92672">.</span><span style="color:#a6e22e">debug</span><span style="color:#f92672">(</span><span style="color:#e6db74">&#34;DelayJobMessageConsumer get job from queue returned: {}&#34;</span><span style="color:#f92672">,</span>
+            ChatRecordConstants<span style="color:#f92672">.</span><span style="color:#a6e22e">DELAY_QUEUE_REPLAY_TIMEOUT_TOPIC</span><span style="color:#f92672">);</span>
+      <span style="color:#f92672">}</span> <span style="color:#66d9ef">catch</span> <span style="color:#f92672">(</span>Exception e<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        log<span style="color:#f92672">.</span><span style="color:#a6e22e">error</span><span style="color:#f92672">(</span><span style="color:#e6db74">&#34;DelayJobMessageConsumer get job from queue {} exception: {}&#34;</span><span style="color:#f92672">,</span>
+            ChatRecordConstants<span style="color:#f92672">.</span><span style="color:#a6e22e">DELAY_QUEUE_REPLAY_TIMEOUT_TOPIC</span><span style="color:#f92672">,</span> e<span style="color:#f92672">.</span><span style="color:#a6e22e">getMessage</span><span style="color:#f92672">(),</span> e<span style="color:#f92672">);</span>
+      <span style="color:#f92672">}</span> <span style="color:#66d9ef">finally</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">try</span> <span style="color:#f92672">{</span>
+          lock<span style="color:#f92672">.</span><span style="color:#a6e22e">unlock</span><span style="color:#f92672">(</span>lockId<span style="color:#f92672">);</span>
+        <span style="color:#f92672">}</span> <span style="color:#66d9ef">catch</span> <span style="color:#f92672">(</span>Exception e<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+          log<span style="color:#f92672">.</span><span style="color:#a6e22e">error</span><span style="color:#f92672">(</span><span style="color:#e6db74">&#34;DelayJobMessageConsumer redis unlock error happened. {}&#34;</span><span style="color:#f92672">,</span> e<span style="color:#f92672">.</span><span style="color:#a6e22e">getMessage</span><span style="color:#f92672">(),</span> e<span style="color:#f92672">);</span>
+        <span style="color:#f92672">}</span>
+      <span style="color:#f92672">}</span>
+
+      <span style="color:#75715e">//process delayJob
+</span><span style="color:#75715e"></span>      <span style="color:#66d9ef">if</span> <span style="color:#f92672">(</span>delayJob <span style="color:#f92672">!=</span> <span style="color:#66d9ef">null</span><span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+        <span style="color:#66d9ef">try</span> <span style="color:#f92672">{</span>
+          <span style="color:#75715e">//对任务进行处理
+</span><span style="color:#75715e"></span>
+          <span style="color:#75715e">// 将任务从Job Pool删除
+</span><span style="color:#75715e"></span>          delayQueue<span style="color:#f92672">.</span><span style="color:#a6e22e">finish</span><span style="color:#f92672">(</span>delayJob<span style="color:#f92672">.</span><span style="color:#a6e22e">getId</span><span style="color:#f92672">());</span>
+        <span style="color:#f92672">}</span> <span style="color:#66d9ef">catch</span> <span style="color:#f92672">(</span>Exception e<span style="color:#f92672">)</span> <span style="color:#f92672">{</span>
+          log<span style="color:#f92672">.</span><span style="color:#a6e22e">error</span><span style="color:#f92672">(</span><span style="color:#e6db74">&#34;DelayJobMessageConsumer process delay job error. {}&#34;</span><span style="color:#f92672">,</span> e<span style="color:#f92672">.</span><span style="color:#a6e22e">getMessage</span><span style="color:#f92672">(),</span> e<span style="color:#f92672">);</span>
+        <span style="color:#f92672">}</span>
+
+      <span style="color:#f92672">}</span>
+    <span style="color:#f92672">}</span>
+  <span style="color:#f92672">}</span>
+<span style="color:#f92672">}</span>
+</code></pre></div><p>消费者线程轮询从ReadyQueue里面获取要执行的延迟任务，并进行处理。</p>
+<p>里面使用了分布式锁是考虑到将来可能会集群部署消费者服务时，保证只有一个线程进行消费处理。</p>
+<h3 id="4-总结">4. 总结<a hidden class="anchor" aria-hidden="true" href="#4-总结">#</a></h3>
+<p>目前实现了延迟队列的基本功能，后续使用过程可能还需要进行一些功能调整，比如对消费失败的消息放入死信队列等。</p>
+
+</div>
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jiayanju.github.io/tags/redis/">Redis</a></li>
+    </ul>
+  </footer>
+</article>
+    </main><footer class="footer">
+    <span>&copy; 2021 <a href="https://jiayanju.github.io">南极阳光</a></span>
+    <span>&middot;</span>
+    <span>Powered by <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a></span>
+    <span>&middot;</span>
+    <span>Theme <a href="https://git.io/hugopapermod" rel="noopener" target="_blank">PaperMod</a></span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)">
+    <button class="top-link" id="top-link" type="button" accesskey="g">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+            <path d="M12 6H0l6-6z" />
+        </svg>
+    </button>
+</a>
+
+
+
+<script>
+    window.onload = function () {
+        if (localStorage.getItem("menu-scroll-position")) {
+            document.getElementById('menu').scrollLeft = localStorage.getItem("menu-scroll-position");
+        }
+    }
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+    function menu_on_scroll() {
+        localStorage.setItem("menu-scroll-position", document.getElementById('menu').scrollLeft);
+    }
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        if (document.body.className.includes("dark")) {
+            document.body.classList.remove('dark');
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            document.body.classList.add('dark');
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+
+</body>
+
+</html>
