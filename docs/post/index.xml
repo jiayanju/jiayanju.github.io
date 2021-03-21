@@ -6,7 +6,16 @@
     <description>Recent content in Posts on 南极阳光</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sat, 20 Mar 2021 12:00:00 +0800</lastBuildDate><atom:link href="https://jiayanju.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Sun, 21 Mar 2021 21:30:00 +0800</lastBuildDate><atom:link href="https://jiayanju.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Git工作常用命令记录</title>
+      <link>https://jiayanju.github.io/post/git-worker/</link>
+      <pubDate>Sun, 21 Mar 2021 21:30:00 +0800</pubDate>
+      
+      <guid>https://jiayanju.github.io/post/git-worker/</guid>
+      <description>git的基本命令就不在赘述，这里主要是记录一下工作中常用或者有用但不常用的命令，希望可以帮助到别的同学。 1. 合并代码 git有俩种方式可以把更改</description>
+    </item>
+    
     <item>
       <title>延迟队列的实现原理和使用</title>
       <link>https://jiayanju.github.io/post/delayqueue/</link>

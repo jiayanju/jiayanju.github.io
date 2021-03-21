@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>Git工作常用命令记录 | 南极阳光</title>
+
+<meta name="keywords" content="git, 工作效率" />
+<meta name="description" content="git的基本命令就不在赘述，这里主要是记录一下工作中常用或者有用但不常用的命令，希望可以帮助到别的同学。 1. 合并代码 git有俩种方式可以把更改">
+<meta name="author" content="Me">
+<link rel="canonical" href="https://jiayanju.github.io/post/git-worker/" />
+<link href="/assets/css/stylesheet.min.4f1ad98d0bbc51ea2c950f063c7e29522bc8945c9dd06348318cd4cce6be44bb.css" integrity="sha256-TxrZjQu8UeoslQ8GPH4pUivIlFyd0GNIMYzUzOa&#43;RLs=" rel="preload stylesheet"
+    as="style">
+
+<link rel="icon" href="https://jiayanju.github.io/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jiayanju.github.io/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jiayanju.github.io/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jiayanju.github.io/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jiayanju.github.io/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<meta name="generator" content="Hugo 0.80.0" />
+
+
+<meta property="og:title" content="Git工作常用命令记录" />
+<meta property="og:description" content="git的基本命令就不在赘述，这里主要是记录一下工作中常用或者有用但不常用的命令，希望可以帮助到别的同学。 1. 合并代码 git有俩种方式可以把更改" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://jiayanju.github.io/post/git-worker/" />
+<meta property="og:image" content="https://raw.githubusercontent.com/jiayanju/imgrepo/main/git.jpg" /><meta property="article:published_time" content="2021-03-21T21:30:00+08:00" />
+<meta property="article:modified_time" content="2021-03-21T21:30:00+08:00" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="https://raw.githubusercontent.com/jiayanju/imgrepo/main/git.jpg" />
+<meta name="twitter:title" content="Git工作常用命令记录"/>
+<meta name="twitter:description" content="git的基本命令就不在赘述，这里主要是记录一下工作中常用或者有用但不常用的命令，希望可以帮助到别的同学。 1. 合并代码 git有俩种方式可以把更改"/>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Git工作常用命令记录",
+  "name": "Git工作常用命令记录",
+  "description": "git的基本命令就不在赘述，这里主要是记录一下工作中常用或者有用但不常用的命令，希望可以帮助到别的同学。 1. 合并代码 git有俩种方式可以把更改",
+  "keywords": [
+    "git", "工作效率"
+  ],
+  "articleBody": "git的基本命令就不在赘述，这里主要是记录一下工作中常用或者有用但不常用的命令，希望可以帮助到别的同学。\n1. 合并代码 git有俩种方式可以把更改从一个分支放到另一个分支，merge和rebase。使用merge的话，会在被放到的分支上生成一个新的commit记录，最后会使分支的commit历史记录变得不清晰明了。所以推荐使用rebase的方式来合并分支，所有的commit历史记录都在一个分支线上，查找起来也比较容易。\n1. rebase的常规使用 通常我们可以这样使用rebase\n$ git checkout -b feature_xx_branch -- 创建并切换到feature分支 ... -- 开发代码 $ git add . $ git commit -m '实现XX功能' $ git rebase develop ... -- 合并冲突等然后执行git rebase --continue $ git checkout develop $ git merge feature_xx_branch -- 已经rebase过了，merge的时候不会生成单独的合并commit 2. 使用rebase合并commit 在功能开发的时候，我们在自己的feature分支上经常会commit多次，因此在feature分支上会有多个commit记录。但合并到develop的时候，为了develop分支的提交历史记录更清晰，需要这个feature只要一个commit记录。这就需要把feature分支上的多个commit合并为一个commit。\n可以使用git rebase -i 命令来做交互式的修改（git rebase –interactive），这个命令需要在后面指定修改的commit范围，有多少个commit需要修改，比如feature分支上有5个commit记录需要合并为1个，使用HEAD~5来指定范围。\n$ git rebase -i HEAD~5 执行完上面的命令后，会出现如下的提示:\npick 1fb69cd update pick e8ec7b0 update pick 81f5262 添加文章 pick 88283a8 update pick 7307eb2 publish # Rebase 3334dbb..7307eb2 onto 3334dbb (5 commands) # # Commands: # p, pick  = use commit # r, reword  = use commit, but edit the commit message # e, edit  = use commit, but stop for amending # s, squash  = use commit, but meld into previous commit # f, fixup  = like \"squash\", but discard this commit's log message # x, exec  = run command (the rest of the line) using shell # b, break = stop here (continue rebase later with 'git rebase --continue') # d, drop  = remove commit # l, label  = label current HEAD with a name # t, reset  = reset HEAD to a label # m, merge [-C  | -c ]  [# ] # . create a merge commit using the original merge commit's # . message (or the oneline, if no original merge commit was # . specified). Use -c  to reword the commit message. # 从上面的提示可以看到，这个命令可以实现很多的功能，包括重写comit信息，删除commit，合并comit，commit排序等。这里要实现commit的合并，可以使用fixup命令，如下所示：\npick 1fb69cd update f e8ec7b0 update f 81f5262 添加文章 f 88283a8 update f 7307eb2 publish 然后保存，就会自动rebase相应的commit记录到第一个记录了。实现了合并commit的功能。\n其他的功能使用，可以参考下面的文档\nhttps://git-scm.com/book/en/v2/Git-Tools-Rewriting-History\n3. 合并分支上的一系列commit到另一个分支上 这个情况是这样的，在开发过程中也会遇到。\n你的功能开发需要基于另一个同事的feature分支上开发。然后同事的feature分支开发完成后，合并为一个commit然后合并到develop了，然后你的feature分支同时还需要develop分支里面其他人的commit。这种情况如下：\n如图片里面所示\nfeature_xx是同事的分支，之后合并到develop为X’的commit\nfeature_yy是你的分支，需要基于最新的develop分支。\n可以使用如下的rebase命令实现：\ngit checkout -b   创建一个新的分支，指明新分支的最后一个commit git rebase --onto   rebase这个分支到要合并到的分支上面，branch_name即为要合并到的分支如develop或者master等。指定从哪一个commit开始 对应图示里面的命令如下\n$ git checkout -b feature_yy_new Y3 $ git rebase --onto develop Y1^ 其他rebase –onto的合并分支例子可以参考下面的文档\nhttps://git-scm.com/book/en/v2/Git-Branching-Rebasing\n4. Cherry-Pick Cherry-Pick就比较简单了，可以实现把一个commit合并到另一个分支上。\n$ git cherry-pick  2. 一些记录 分支重命名 git branch -m old new\ncommit作者更改 最后一个commit修改：\ngit commit –amend –author=“NewAuthor NewEmail@address*.*com”\ngit push -f\n非最后一个commit修改：\ngit rebase -i commit_id（第N+1条记录的commitId）\ngit commit –amend –author=“NewAuthor NewEmail@address*.*com”\ngit rebase –continue\ngit push -f\ncommit时在vim界面取消操作 有的时候commit的时候，到vim界面的时候发现comit有的问题，想撤销这个操作，使用q或者q！都不影响命令的继续执行。可以使用cq命令返回\n:cq 撤回commit git reset –soft HEAD^\nHEAD^的意思是上一个版本，也可以写成HEAD~1 如果你进行了2次commit，想都撤回，可以使用HEAD~2\n--mixed  意思是：不删除工作空间改动代码，撤销commit，并且撤销git add . 操作 这个为默认参数，git reset --mixed HEAD^ 和 git reset HEAD^ 效果是一样的。\n--soft 不删除工作空间改动代码，撤销commit，不撤销git add .\n--hard 删除工作空间改动代码，撤销commit，撤销git add . 注意完成这个操作后，会删除工作空间代码！！！恢复到上一次的commit状态。慎重！！！\n撤回git commit –amend 有的时候需要commit代码却手滑使用了amend，怎么撤销呢。\n首先使用git reflog\n2148246 (HEAD - main) HEAD@{0}: commit (amend): update1 5bbf58f HEAD@{1}: commit: update 7307eb2 (origin/main) HEAD@{2}: checkout: moving from test to main 7307eb2 (origin/main) HEAD@{3}: checkout: moving from main to test 7307eb2 (origin/main) HEAD@{4}: commit: publish 88283a8 HEAD@{5}: commit: update 81f5262 HEAD@{6}: pull: Fast-forward e8ec7b0 HEAD@{7}: commit: update 1fb69cd HEAD@{8}: commit: update 3334dbb HEAD@{9}: pull: Fast-forward 08108cb HEAD@{10}: commit: update 62a4474 HEAD@{11}: pull --rebase origin main: Fast-forward 6e90f11 HEAD@{12}: commit: publish config changes 2fb237c HEAD@{13}: commit: config change 可以看到里面记录各种操作记录\n然后使用\ngit reset --soft HEAD@{1} 就可以了\n",
+  "wordCount" : "2096",
+  "inLanguage": "en",
+  "image":"https://raw.githubusercontent.com/jiayanju/imgrepo/main/git.jpg","datePublished": "2021-03-21T21:30:00+08:00",
+  "dateModified": "2021-03-21T21:30:00+08:00",
+  "author":{
+    "@type": "Person",
+    "name": "Me"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jiayanju.github.io/post/git-worker/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "南极阳光",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jiayanju.github.io/favicon.ico"
+    }
+  }
+}
+</script>
+
+
+
+</head>
+
+<body class="" id="top">
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.body.classList.add('dark');
+    } else if (localStorage.getItem("pref-theme") === "light") {
+        document.body.classList.remove('dark')
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark');
+    }
+
+</script>
+<noscript>
+    <style type="text/css">
+        .theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+</noscript>
+<header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://jiayanju.github.io" accesskey="h" title="南极阳光 (Alt + H)">南极阳光</a>
+            <span class="logo-switches">
+                <span class="theme-toggle" title="(Alt + T)">
+                    <a id="theme-toggle" accesskey="t">
+                        <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                        <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="5"></circle>
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="23"></line>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                            <line x1="1" y1="12" x2="3" y2="12"></line>
+                            <line x1="21" y1="12" x2="23" y2="12"></line>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                        </svg>
+                    </a>
+                </span>
+                
+            </span>
+        </div>
+        <ul class="menu" id="menu" onscroll="menu_on_scroll()">
+            <li>
+                <a href="https://jiayanju.github.io/posts" title="Blog">
+                    <span>Blog</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://jiayanju.github.io/categories" title="Categories">
+                    <span>Categories</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://jiayanju.github.io/tags" title="Tags">
+                    <span>Tags</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://jiayanju.github.io/about" title="About">
+                    <span>About</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://jiayanju.github.io/search" title="Search (Alt &#43; /)" accesskey=/>
+                    <span>Search</span>
+                </a>
+            </li></ul>
+    </nav>
+</header>
+
+    <main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    <h1 class="post-title">
+      Git工作常用命令记录
+    </h1>
+    <div class="post-description">
+      
+    </div>
+    <div class="post-meta">
+
+March 21, 2021&nbsp;·&nbsp;Me
+
+    </div>
+  </header> 
+<figure class="entry-cover"><img src="https://raw.githubusercontent.com/jiayanju/imgrepo/main/git.jpg" alt="">
+        
+</figure>
+
+  <div class="toc">
+    <details >
+      <summary accesskey="c" title="(Alt + C)">
+        <div class="details">Table of Contents</div>
+      </summary>
+      <div class="inner"><ul><li>
+        <a href="#1-%e5%90%88%e5%b9%b6%e4%bb%a3%e7%a0%81" aria-label="1. 合并代码">1. 合并代码</a><ul>
+            <ul>
+            <li>
+        <a href="#1-rebase%e7%9a%84%e5%b8%b8%e8%a7%84%e4%bd%bf%e7%94%a8" aria-label="1. rebase的常规使用">1. rebase的常规使用</a></li><li>
+        <a href="#2-%e4%bd%bf%e7%94%a8rebase%e5%90%88%e5%b9%b6commit" aria-label="2. 使用rebase合并commit">2. 使用rebase合并commit</a></li><li>
+        <a href="#3-%e5%90%88%e5%b9%b6%e5%88%86%e6%94%af%e4%b8%8a%e7%9a%84%e4%b8%80%e7%b3%bb%e5%88%97commit%e5%88%b0%e5%8f%a6%e4%b8%80%e4%b8%aa%e5%88%86%e6%94%af%e4%b8%8a" aria-label="3. 合并分支上的一系列commit到另一个分支上">3. 合并分支上的一系列commit到另一个分支上</a></li><li>
+        <a href="#4-cherry-pick" aria-label="4. Cherry-Pick">4. Cherry-Pick</a></li></ul>
+        </ul>
+    </li><li>
+        <a href="#2-%e4%b8%80%e4%ba%9b%e8%ae%b0%e5%bd%95" aria-label="2. 一些记录">2. 一些记录</a><ul>
+            <ul>
+            <li>
+        <a href="#%e5%88%86%e6%94%af%e9%87%8d%e5%91%bd%e5%90%8d" aria-label="分支重命名">分支重命名</a></li><li>
+        <a href="#commit%e4%bd%9c%e8%80%85%e6%9b%b4%e6%94%b9" aria-label="commit作者更改">commit作者更改</a></li><li>
+        <a href="#commit%e6%97%b6%e5%9c%a8vim%e7%95%8c%e9%9d%a2%e5%8f%96%e6%b6%88%e6%93%8d%e4%bd%9c" aria-label="commit时在vim界面取消操作">commit时在vim界面取消操作</a></li><li>
+        <a href="#%e6%92%a4%e5%9b%9ecommit" aria-label="撤回commit">撤回commit</a></li><li>
+        <a href="#%e6%92%a4%e5%9b%9egit-commit---amend" aria-label="撤回git commit &amp;ndash;amend">撤回git commit &ndash;amend</a></li></ul></ul>
+</li></ul>
+      </div>
+    </details>
+  </div>
+  <div class="post-content">
+<p>git的基本命令就不在赘述，这里主要是记录一下工作中常用或者有用但不常用的命令，希望可以帮助到别的同学。</p>
+<h2 id="1-合并代码">1. 合并代码<a hidden class="anchor" aria-hidden="true" href="#1-合并代码">#</a></h2>
+<p>git有俩种方式可以把更改从一个分支放到另一个分支，merge和rebase。使用merge的话，会在被放到的分支上生成一个新的commit记录，最后会使分支的commit历史记录变得不清晰明了。所以推荐使用rebase的方式来合并分支，所有的commit历史记录都在一个分支线上，查找起来也比较容易。</p>
+<h4 id="1-rebase的常规使用">1. rebase的常规使用<a hidden class="anchor" aria-hidden="true" href="#1-rebase的常规使用">#</a></h4>
+<p>通常我们可以这样使用rebase</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ git checkout -b feature_xx_branch   -- 创建并切换到feature分支
+... -- 开发代码
+$ git add .
+$ git commit -m <span style="color:#e6db74">&#39;实现XX功能&#39;</span>
+
+$ git rebase develop
+... -- 合并冲突等然后执行git rebase --continue
+$ git checkout develop
+$ git merge feature_xx_branch  -- 已经rebase过了，merge的时候不会生成单独的合并commit
+</code></pre></div><h4 id="2-使用rebase合并commit">2. 使用rebase合并commit<a hidden class="anchor" aria-hidden="true" href="#2-使用rebase合并commit">#</a></h4>
+<p>在功能开发的时候，我们在自己的feature分支上经常会commit多次，因此在feature分支上会有多个commit记录。但合并到develop的时候，为了develop分支的提交历史记录更清晰，需要这个feature只要一个commit记录。这就需要把feature分支上的多个commit合并为一个commit。</p>
+<p>可以使用git rebase -i 命令来做交互式的修改（git rebase &ndash;interactive），这个命令需要在后面指定修改的commit范围，有多少个commit需要修改，比如feature分支上有5个commit记录需要合并为1个，使用HEAD~5来指定范围。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">$ git rebase -i HEAD~5
+</code></pre></div><p>执行完上面的命令后，会出现如下的提示:</p>
+<pre><code>pick 1fb69cd update
+pick e8ec7b0 update
+pick 81f5262 添加文章
+pick 88283a8 update
+pick 7307eb2 publish
+
+# Rebase 3334dbb..7307eb2 onto 3334dbb (5 commands)
+#
+# Commands:
+# p, pick &lt;commit&gt; = use commit
+# r, reword &lt;commit&gt; = use commit, but edit the commit message
+# e, edit &lt;commit&gt; = use commit, but stop for amending
+# s, squash &lt;commit&gt; = use commit, but meld into previous commit
+# f, fixup &lt;commit&gt; = like &quot;squash&quot;, but discard this commit's log message
+# x, exec &lt;command&gt; = run command (the rest of the line) using shell
+# b, break = stop here (continue rebase later with 'git rebase --continue')
+# d, drop &lt;commit&gt; = remove commit
+# l, label &lt;label&gt; = label current HEAD with a name
+# t, reset &lt;label&gt; = reset HEAD to a label
+# m, merge [-C &lt;commit&gt; | -c &lt;commit&gt;] &lt;label&gt; [# &lt;oneline&gt;]
+# .       create a merge commit using the original merge commit's
+# .       message (or the oneline, if no original merge commit was
+# .       specified). Use -c &lt;commit&gt; to reword the commit message.
+#
+</code></pre><p>从上面的提示可以看到，这个命令可以实现很多的功能，包括重写comit信息，删除commit，合并comit，commit排序等。这里要实现commit的合并，可以使用fixup命令，如下所示：</p>
+<pre><code>pick 1fb69cd update
+f e8ec7b0 update
+f 81f5262 添加文章
+f 88283a8 update
+f 7307eb2 publish
+</code></pre><p>然后保存，就会自动rebase相应的commit记录到第一个记录了。实现了合并commit的功能。</p>
+<p>其他的功能使用，可以参考下面的文档</p>
+<p><a href="https://git-scm.com/book/en/v2/Git-Tools-Rewriting-History">https://git-scm.com/book/en/v2/Git-Tools-Rewriting-History</a></p>
+<h4 id="3-合并分支上的一系列commit到另一个分支上">3. 合并分支上的一系列commit到另一个分支上<a hidden class="anchor" aria-hidden="true" href="#3-合并分支上的一系列commit到另一个分支上">#</a></h4>
+<p>这个情况是这样的，在开发过程中也会遇到。</p>
+<p>你的功能开发需要基于另一个同事的feature分支上开发。然后同事的feature分支开发完成后，合并为一个commit然后合并到develop了，然后你的feature分支同时还需要develop分支里面其他人的commit。这种情况如下：</p>
+<p><img src="https://raw.githubusercontent.com/jiayanju/imgrepo/main/git-rabse-onto.png" alt=""></p>
+<p>如图片里面所示</p>
+<p>feature_xx是同事的分支，之后合并到develop为X&rsquo;的commit</p>
+<p>feature_yy是你的分支，需要基于最新的develop分支。</p>
+<p>可以使用如下的rebase命令实现：</p>
+<pre><code>git checkout -b &lt;new_branch_name&gt; &lt;to-commit-id&gt;
+创建一个新的分支，指明新分支的最后一个commit
+
+git rebase --onto &lt;branch_name&gt; &lt;from-commit-id&gt;
+rebase这个分支到要合并到的分支上面，branch_name即为要合并到的分支如develop或者master等。指定从哪一个commit开始
+</code></pre><p>对应图示里面的命令如下</p>
+<pre><code>$ git checkout -b feature_yy_new Y3
+
+$ git rebase --onto develop Y1^
+</code></pre><p>其他rebase &ndash;onto的合并分支例子可以参考下面的文档</p>
+<p><a href="https://git-scm.com/book/en/v2/Git-Branching-Rebasing">https://git-scm.com/book/en/v2/Git-Branching-Rebasing</a></p>
+<h4 id="4-cherry-pick">4. Cherry-Pick<a hidden class="anchor" aria-hidden="true" href="#4-cherry-pick">#</a></h4>
+<p>Cherry-Pick就比较简单了，可以实现把一个commit合并到另一个分支上。</p>
+<pre><code>$ git cherry-pick &lt;commit-id&gt;
+</code></pre><h2 id="2-一些记录">2. 一些记录<a hidden class="anchor" aria-hidden="true" href="#2-一些记录">#</a></h2>
+<h4 id="分支重命名">分支重命名<a hidden class="anchor" aria-hidden="true" href="#分支重命名">#</a></h4>
+<p>git branch -m old new</p>
+<h4 id="commit作者更改">commit作者更改<a hidden class="anchor" aria-hidden="true" href="#commit作者更改">#</a></h4>
+<p>最后一个commit修改：</p>
+<p>git commit &ndash;amend &ndash;author=&ldquo;NewAuthor NewEmail@address*.*com&rdquo;</p>
+<p>git push -f</p>
+<p>非最后一个commit修改：</p>
+<p>git rebase -i commit_id（第N+1条记录的commitId）</p>
+<p>git commit &ndash;amend &ndash;author=&ldquo;NewAuthor NewEmail@address*.*com&rdquo;</p>
+<p>git rebase &ndash;continue</p>
+<p>git push -f</p>
+<h4 id="commit时在vim界面取消操作">commit时在vim界面取消操作<a hidden class="anchor" aria-hidden="true" href="#commit时在vim界面取消操作">#</a></h4>
+<p>有的时候commit的时候，到vim界面的时候发现comit有的问题，想撤销这个操作，使用q或者q！都不影响命令的继续执行。可以使用cq命令返回</p>
+<pre><code>:cq
+</code></pre><h4 id="撤回commit">撤回commit<a hidden class="anchor" aria-hidden="true" href="#撤回commit">#</a></h4>
+<p>git reset &ndash;soft HEAD^</p>
+<p>HEAD^的意思是上一个版本，也可以写成HEAD~1
+如果你进行了2次commit，想都撤回，可以使用HEAD~2</p>
+<p><code>--mixed </code>
+意思是：不删除工作空间改动代码，撤销commit，并且撤销git add . 操作
+这个为默认参数，<code>git reset --mixed HEAD^</code> 和 <code>git reset HEAD^</code> 效果是一样的。</p>
+<p><code>--soft</code>
+不删除工作空间改动代码，<strong>撤销commit</strong>，<strong>不撤销<code>git add .</code></strong></p>
+<p><code>--hard</code>
+<strong>删除工作空间改动代码</strong>，<strong>撤销commit，撤销<code>git add .</code></strong>
+<strong>注意完成这个操作后，会删除工作空间代码！！！恢复到上一次的commit状态。慎重！！！</strong></p>
+<h4 id="撤回git-commit---amend">撤回git commit &ndash;amend<a hidden class="anchor" aria-hidden="true" href="#撤回git-commit---amend">#</a></h4>
+<p>有的时候需要commit代码却手滑使用了amend，怎么撤销呢。</p>
+<p>首先使用git reflog</p>
+<pre><code>2148246 (HEAD -&gt; main) HEAD@{0}: commit (amend): update1
+5bbf58f HEAD@{1}: commit: update
+7307eb2 (origin/main) HEAD@{2}: checkout: moving from test to main
+7307eb2 (origin/main) HEAD@{3}: checkout: moving from main to test
+7307eb2 (origin/main) HEAD@{4}: commit: publish
+88283a8 HEAD@{5}: commit: update
+81f5262 HEAD@{6}: pull: Fast-forward
+e8ec7b0 HEAD@{7}: commit: update
+1fb69cd HEAD@{8}: commit: update
+3334dbb HEAD@{9}: pull: Fast-forward
+08108cb HEAD@{10}: commit: update
+62a4474 HEAD@{11}: pull --rebase origin main: Fast-forward
+6e90f11 HEAD@{12}: commit: publish config changes
+2fb237c HEAD@{13}: commit: config change
+</code></pre><p>可以看到里面记录各种操作记录</p>
+<p>然后使用</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">git reset --soft HEAD@<span style="color:#f92672">{</span>1<span style="color:#f92672">}</span>
+</code></pre></div><p>就可以了</p>
+
+</div>
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jiayanju.github.io/tags/git/">git</a></li>
+      <li><a href="https://jiayanju.github.io/tags/%E5%B7%A5%E4%BD%9C%E6%95%88%E7%8E%87/">工作效率</a></li>
+    </ul>
+  </footer>
+</article>
+    </main><footer class="footer">
+    <span>&copy; 2021 <a href="https://jiayanju.github.io">南极阳光</a></span>
+    <span>&middot;</span>
+    <span>Powered by <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a></span>
+    <span>&middot;</span>
+    <span>Theme <a href="https://git.io/hugopapermod" rel="noopener" target="_blank">PaperMod</a></span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)">
+    <button class="top-link" id="top-link" type="button" accesskey="g">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+            <path d="M12 6H0l6-6z" />
+        </svg>
+    </button>
+</a>
+
+
+
+<script>
+    window.onload = function () {
+        if (localStorage.getItem("menu-scroll-position")) {
+            document.getElementById('menu').scrollLeft = localStorage.getItem("menu-scroll-position");
+        }
+    }
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+    function menu_on_scroll() {
+        localStorage.setItem("menu-scroll-position", document.getElementById('menu').scrollLeft);
+    }
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        if (document.body.className.includes("dark")) {
+            document.body.classList.remove('dark');
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            document.body.classList.add('dark');
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+
+</body>
+
+</html>
