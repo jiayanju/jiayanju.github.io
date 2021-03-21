@@ -26,7 +26,7 @@ disableHLJS: true
 disableShare: false 
 
 cover:
-  image: "https://raw.githubusercontent.com/jiayanju/imgrepo/main/idea.png"
+  image: "https://raw.githubusercontent.com/jiayanju/imgrepo/main/delayQueue.jpg"
   alt: ""
   caption: ""
   relative: false
