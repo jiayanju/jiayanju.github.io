@@ -157,6 +157,20 @@ Cherry-Pick就比较简单了，可以实现把一个commit合并到另一个分
 $ git cherry-pick <commit-id>
 ```
 
+同时cherry-pick也支持多个commit合并到另一个分支上。
+
+```bash
+$ git cherry-pick commit-id1..commit-idn
+```
+
+注意两个commit id之间的 **..** 符号，另外commit-id1是不包含在里面，如果想要包含comit-id1,使用^符号
+
+```
+$ git cherry-pick commit-id1^..commit-idn
+```
+
+
+
 ## 2. 一些记录
 
 #### 分支重命名
